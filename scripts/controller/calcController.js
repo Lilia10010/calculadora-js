@@ -1,36 +1,143 @@
 class CalcController {
 
     constructor(){
-        this.lastOperator = '';
+
+        this._audio = new Audio('click.mp3');
+        this._audioOnOff = false;
+        this._lastOperator = '';
         this._lastNumber = '';
+
         this._operation = [];
-        this._locale = 'pt-BR'; //como sera usado em varios locais criamos um atributo 
+        this._locale = 'pt-BR'; 
         this._displayCalcEl = document.querySelector("#display");
         this._dateEl = document.querySelector("#data");
         this._timeEl = document.querySelector("#hora");       
         this._currentDate;
         this.initialize();
         this.initButtonsEvents();
+        this.initKeyboard();
     }
 
-    initialize(){     
-       
-       // this._dateEl.innerHTML = "01/05/2020"; tirar pq a partir de agora será automático
-        //this._timeEl.innerHTML = "20:20";
+    copyToClipboard(){
+//criando elemento na tela para aceitar o ctrl + c, ctrl + v
+        let input = document.createElement('input');
 
-        this.setDisplayDateTime(); // colocar antes tambem para não dar aquele delay
+        input.value = this.displayCalc;
+        
+        document.body.appendChild(input);
+
+        input.select();
+
+        document.execCommand("Copy");
+
+        input.remove();
+
+    }
+
+    pasteFromClipboard(){
+        document.addEventListener('paste', e=> {
+            let text = e.clipboardData.getData('Text');
+
+            
+            this.displayCalc = parseFloat(text);
+            //console.log('textoooo', text);
+
+        });
+    }
+
+    initialize(){  
+
+        this.setDisplayDateTime(); 
 
         setInterval(()=>{
             this.setDisplayDateTime();           
-        },1000); // a cada milisegundos sera executado esta function (1s)
+        },1000);
 
         this.setLastNumberToDisplay();
-       
-     } // tudo que quiser que aconteca qndo iniciar a calculadora coloca aqui dentro
 
-     addEventListenerAll(element, events, fn){ // transformar o events em array e colocar no foreach
+        this.pasteFromClipboard();
+        
+    //para ativar e desativar audio no duplo click 
+        document.querySelectorAll('.btn-ac').forEach(btn =>{
+            btn.addEventListener('dblclick', e=>{
+                this.toggleAudio();
+            })
+        })
+       
+     }
+
+     //metodo pra saber o estado do audio
+     toggleAudio(){
+
+        //como é boolean, podemos dizer que ele é o contrario dele mesmo
+        this._audioOnOff = !this._audioOnOff;
+
+     }
+
+    //metodo pra tocar o audio
+    playAudio(){
+        
+        if(this._audioOnOff){
+
+            this._audio.currentTime = 0;
+            this._audio.play();
+        }
+    }
+
+     initKeyboard(){
+
+        document.addEventListener('keyup', e=>{
+            this.playAudio();
+           // console.log(e.key);
+            switch (e.key){
+                case 'Escape':
+                    this.clearAll();
+                    break;
+                case 'Backspace':
+                    this.clearEntry();
+                    break;
+   
+                case '+':
+                case '-':
+                case '*':
+                case '/':
+                case '%':
+                    this.addOperation(e.key);                 
+                       break;
+                case 'Enter':
+                case '+':
+                    this.calc();                   
+                    break;
+   
+                case '.':
+                case ',':
+                   this.addDot('.');
+                    break;
+   
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                    this.addOperation(parseInt(e.key));
+                    break;   
+            
+                case 'c':
+                    if(e.ctrlKey) this.copyToClipboard();
+                    break;               
+            }
+        });
+
+     }
+
+     addEventListenerAll(element, events, fn){ 
         events.split(' ').forEach( event =>{
-            element.addEventListener(event, fn, false); // nome do evento, funcão que quer adicionar, false para não contaabilizar dois clicks (do texto e do botão)
+            element.addEventListener(event, fn, false); 
         });
 
      }
@@ -38,6 +145,9 @@ class CalcController {
      //limpar tudo 
      clearAll(){
          this._operation = [];
+         this._lastNumber = '';
+         this._lastOperator = '';
+
          this.setLastNumberToDisplay();
      }
  //pop elimina o último 
@@ -53,19 +163,12 @@ class CalcController {
     setLastOperation(value){
         this._operation[this._operation.length -1] = value;
     }
-//o indexOf vai verificar se o value esta dentro do array, se estiver vai retornar o index dele se não retorna o -1
-//(se index encontrado é maior que -1)
+
     isOperator(value){
-        return (['+', '-', '*', '%', '/'].indexOf(value) > -1); //p simplificar (vai retornar ou o index ou o -1)
-        /*
-        if (['+', '-', '*', '%', '/'].indexOf(value) > -1) { // verificar se o value esta dentro do array, se estiver vai retornar o index dele se não retorna o -1 ()
-            return true; 
-        } else{
-            return false;
-        }
-    }*/
+        return (['+', '-', '*', '%', '/'].indexOf(value) > -1);
     }
-//push adiciona mais um valor ao array
+
+//adicionando valor do click no array
     pushOperation(value){
         this._operation.push(value);
         if (this._operation.length > 3){
@@ -74,43 +177,82 @@ class CalcController {
     }
 
     getResult(){
-        return eval(this._operation.join(""));
+
+        try{
+            return eval(this._operation.join(""));
+        } catch(e){
+            
+            setTimeout(()=>{
+                this.setError();                
+            }, 1);
+        }
     }
 
     calc(){
         let last = '';
+
+        this._lastOperator = this.getLastItem();
+
+        if(this._operation.length < 3){
+            let firstItem = this._operation[0];  
+            this._operation = [firstItem, this._lastOperator, this._lastNumber];
+        }
+
         if(this._operation.length > 3){
             last = this._operation.pop(); 
+            
             this._lastNumber = this.getResult();
 
+        }else if(this._operation.length == 3){
+
+            this._lastNumber = this.getLastItem(false);
         }
+
+console.log('operato' , this._lastOperator);
+console.log(this._lastNumber);
+
         let result = this.getResult();
         
         if(last == '%') {
-//jeito convencional: result = result / 100; (qndo uma variavel é igual a ela mesma e mais uma operação)
+
             result /= 100;
             this._operation = [result];
             
         }else{            
-            this._operation = [result]; // agora o operation vai receber o result e o ultimo operador
+            this._operation = [result]; 
             if(last) this._operation.push(last);
         }
-        //if last for diferente de vazio faz o this
+        
 
         this.setLastNumberToDisplay();
     }
 
-    //metodo para aparecer no displai os numeros digitados
-    setLastNumberToDisplay(){
-        let lastNumber;
+
+    getLastItem(isOperator = true){
+        let lastItem;
 
         for(let i = this._operation.length -1; i >= 0; i--){
-            if(!this.isOperator(this._operation[i])){
-                lastNumber = this._operation[i];
-                break;
-            }
-        }
 
+            if(this.isOperator(this._operation[i]) == isOperator){
+                lastItem = this._operation[i];
+                break;
+            }            
+        }
+        
+
+        if(!lastItem){
+            lastItem = (isOperator) ? this._lastOperator :this._lastNumber;
+        }
+        return lastItem;
+
+    }
+
+    //metodo para aparecer no display os numeros digitados
+    setLastNumberToDisplay(){
+
+        let lastNumber = this.getLastItem(false);
+
+        
         if(!lastNumber) lastNumber = 0; 
 
         this.displayCalc = lastNumber;
@@ -118,22 +260,20 @@ class CalcController {
     }
 
      addOperation(value){
-//isNaN: se não for um número
-         if(isNaN(this.getLastOperation() )){ //pegar a última posição do array se não for um número
+
+        //pegar a última posição do array se não for um número
+         if(isNaN(this.getLastOperation() )){ 
              //string
              if(this.isOperator(value)){
                  //trocar o perador se for digitado dois ou mais operadores seguidos
                  this.setLastOperation(value); //o último item será igual ao operador do momento
                  // vai substituir um novo operador ao invés de adicionar
-             }else if(isNaN(value)){
-                 // outra coisa
-                 console.log(value);
              } else{
-                 // se cair aqui provavelmente é um numero e faz um push dele pro array
+                 
                  this.pushOperation(value);
 
                  this.setLastNumberToDisplay();
-             }
+              }
          } else{
 
             if(this.isOperator(value)){
@@ -144,15 +284,14 @@ class CalcController {
 
                 //converter o valor para string para ser possivél a concatenação (ao invés de somar númers seguido)
                 let newValue = this.getLastOperation().toString() + value.toString();
-             this.setLastOperation(parseInt(newValue)); //adicionar o novo valor dentro do array
+             this.setLastOperation(newValue); //adicionar o novo valor dentro do array
 
-             //atualizar display
+             
              this.setLastNumberToDisplay();
             }  
             
         }
-        console.log(this._operation);
-        
+        //console.log(this._operation);       
          
      }
 
@@ -162,7 +301,24 @@ class CalcController {
          this.displayCalc = "Errou";
      }
 
+     addDot(){
+         let lastOperation = this.getLastOperation();
+
+        if(typeof lastOperation === 'string' && lastOperation.split('').indexOf('.') > -1) return;
+        
+         if(this.isOperator(lastOperation) || !lastOperation){
+             this.pushOperation('0.');
+         }else{
+             this.setLastOperation(lastOperation.toString() + '.');
+         }
+
+         this.setLastNumberToDisplay();
+     }
+
      execBtn(value){
+
+        this.playAudio();
+
          switch (value){
              case 'ac':
                  this.clearAll();
@@ -195,7 +351,7 @@ class CalcController {
                  break;
 
              case 'ponto':
-                this.addOperation('.');
+                this.addDot('.');
                  break;
 
              case '0':
@@ -218,16 +374,15 @@ class CalcController {
 
 
      initButtonsEvents(){
-         //document.querySelector("#buttons > g, #pats > g"); //selecionar primeira tags g filha de buttons
+         
          let buttons = document.querySelectorAll("#buttons > g, #parts > g");
-
        
-         buttons.forEach((btn, index)=>{ //percorrer cada button- um parametro não precisa de parentes
+         buttons.forEach((btn, index)=>{ 
 
             this.addEventListenerAll(btn,"click drag", e=>{
-                let textBtn = btn.className.baseVal.replace("btn-", ""); //pegar o nome da class - replace (retira, o que colocar no lugar)
+                let textBtn = btn.className.baseVal.replace("btn-", ""); 
                 this.execBtn(textBtn);
-            }); //recebe até dois parâmertro(quual o evento q vc quer, e o que deve ser feito)
+            }); 
 
             
             this.addEventListenerAll(btn, "mouseover mouseup mousedown", e =>{
@@ -265,11 +420,17 @@ class CalcController {
          return this._dateEl.innerHTML = value;
      }
 
-    get displayCalc(){ // qndo for chamado vai verificar se tem esse get e se tiver vai retornar o que esta dentro
-        return this._displayCalcEl.innerHTML; // no caso este valor
+    get displayCalc(){
+        return this._displayCalcEl.innerHTML;
     }
 
     set displayCalc(value){
+
+        if(value.toString().length > 10){
+            this.setError();
+            return false;
+        }
+
         this._displayCalcEl.innerHTML = value;
     }
 
@@ -279,13 +440,5 @@ class CalcController {
 
     set currentDate(value){
         this._currentDate = value;
-    }
-    
+    }    
 }
-
-/**
- * split: coloca algo entre os valore
- * join: une o array em string (vazio) string com as virgulas ("aspa") tira as virgulas
- * pop: tira o último valor do array
- * push coloca um valor no array
- */
