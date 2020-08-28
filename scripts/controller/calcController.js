@@ -435,6 +435,7 @@ console.log(this._lastNumber);
     }
 
     get currentDate(){
+        
         return new Date();
     }
 
